@@ -59,7 +59,8 @@ class EloquaInterface:
             r = requests.get(url, headers=header)
         else: 
             r = requests.post(url, headers=header,data = json.dumps(data))
-        return json.loads(r.text)
+        response = json.loads(r.text)
+        return response
     
     def get_bulk_url(self):
         """Método para adquirir o url para a api bulk
@@ -74,7 +75,6 @@ class EloquaInterface:
         
         url = "https://login.eloqua.com/id"
         root_response = self.req(url)
-        print(root_response)
         return root_response['urls']['apis']['rest']['bulk'].replace('{version}','2.0')
    
     def get_standard_url(self):
@@ -91,6 +91,7 @@ class EloquaInterface:
         url = "https://login.eloqua.com/id"
         root_response = self.req(url)
         return root_response['urls']['apis']['rest']['standard'].replace('{version}','2.0')
+    
     def get_campaigns(self):
         """Método para adquirir todas as campanhas do eloqua. Usamos a versão 2.0 da api
 
@@ -100,8 +101,7 @@ class EloquaInterface:
             -------
             str
                 string contendo o endereço url da api padrão 2.0
-        """
-        
+        """ 
         std_url = self.get_standard_url()
         page = 1
         page_size = 500
@@ -114,9 +114,7 @@ class EloquaInterface:
         pages = int(ceil(total/page_size))
         if pages > 1:
             for i in range(2,pages+1):
-                print("Entrou aqui")
                 page = i
-                print("Page",page)
                 campaign_url = std_url + "assets/campaigns?count={}&page={}".format(page_size,page)
                 root_response = self.req(campaign_url)
                 campaigns.extend(root_response["elements"])
@@ -171,17 +169,20 @@ class EloquaInterface:
             if(count == 60):
                 status = "success"
         get_data_response = self.req(get_data_url,method='get')
-        data = get_data_response["items"]
         print("Resposta: count: {}, hasMore: {}".format(get_data_response["count"],get_data_response["hasMore"]))
-        # Se houver mais linhas pendentes, ira fazer mais requisições para adquirir todas. Cada loop adquire 50k linhas.
-        while get_data_response["hasMore"]:  
-            #mudando o offset para buscar as proximas linhas 
-            offset += 50000
-            get_data_url = url+data_uri+"/data?limit=50000&offset={}".format(offset)
-            get_data_response = self.req(get_data_url,method='get')
-            print("Resposta: count: {}, hasMore{}".format(get_data_response["count"],get_data_response["hasMore"]))
-            data.extend(get_data_response["items"])
             
+        if get_data_response["totalResults"] > 0:
+            data = get_data_response["items"]
+            # Se houver mais linhas pendentes, ira fazer mais requisições para adquirir todas. Cada loop adquire 50k linhas.
+            while get_data_response["hasMore"]:  
+                #mudando o offset para buscar as proximas linhas 
+                offset += 50000
+                get_data_url = url+data_uri+"/data?limit=50000&offset={}".format(offset)
+                get_data_response = self.req(get_data_url,method='get')
+                print("Resposta: count: {}, hasMore{}".format(get_data_response["count"],get_data_response["hasMore"]))
+                data.extend(get_data_response["items"])
+        else:
+            data = []
         return data
     
     def syc_data(self,url,export_url):
@@ -389,11 +390,9 @@ class EloquaInterface:
                 lista contendo todos os dados de email enviado de todas as campanhas
         """
         data = []
+        count = 1
         for campaign in campaign_ids:
+            print("Retirando campanha de numero {} - ID: {}".format(count,campaign))
+            count +=1
             data.extend(self.get_sent_data(campaign))
         return data
-    
-username = "Daniel.Vieira"
-password = "Serasa@0"
-site_name = "SERASASA"
-interfaface = EloquaInterface(user_name=username,password=password,site_name=site_name)
