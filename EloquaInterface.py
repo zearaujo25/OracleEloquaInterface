@@ -9,6 +9,7 @@ import requests
 import base64 
 import json
 import time
+from math import ceil 
 class UserPasswordException(Exception):
     pass
 
@@ -73,9 +74,54 @@ class EloquaInterface:
         
         url = "https://login.eloqua.com/id"
         root_response = self.req(url)
+        print(root_response)
         return root_response['urls']['apis']['rest']['bulk'].replace('{version}','2.0')
    
-    
+    def get_standard_url(self):
+        """Método para adquirir o url para a api padrão 2.0
+
+            Parameters
+            ----------
+            Returns
+            -------
+            str
+                string contendo o endereço url da api padrão 2.0
+        """
+        
+        url = "https://login.eloqua.com/id"
+        root_response = self.req(url)
+        return root_response['urls']['apis']['rest']['standard'].replace('{version}','2.0')
+    def get_campaigns(self):
+        """Método para adquirir todas as campanhas do eloqua. Usamos a versão 2.0 da api
+
+            Parameters
+            ----------
+            Returns
+            -------
+            str
+                string contendo o endereço url da api padrão 2.0
+        """
+        
+        std_url = self.get_standard_url()
+        page = 1
+        page_size = 500
+        campaigns = []
+        campaign_url = std_url + "assets/campaigns?count={}&page={}".format(page_size,page)
+        root_response = self.req(campaign_url)
+        total = root_response["total"]
+        print("Total: {}".format(total))
+        campaigns.extend(root_response["elements"])
+        pages = int(ceil(total/page_size))
+        if pages > 1:
+            for i in range(2,pages+1):
+                print("Entrou aqui")
+                page = i
+                print("Page",page)
+                campaign_url = std_url + "assets/campaigns?count={}&page={}".format(page_size,page)
+                root_response = self.req(campaign_url)
+                campaigns.extend(root_response["elements"])
+        return campaigns
+        
     def check_data(self,url,data_uri):
         """Método para verificar o status da api para exportação de dados
 
@@ -347,4 +393,7 @@ class EloquaInterface:
             data.extend(self.get_sent_data(campaign))
         return data
     
-
+username = "Daniel.Vieira"
+password = "Serasa@0"
+site_name = "SERASASA"
+interfaface = EloquaInterface(user_name=username,password=password,site_name=site_name)
