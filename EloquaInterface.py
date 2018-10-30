@@ -74,8 +74,15 @@ class EloquaInterface:
         """
         
         url = "https://login.eloqua.com/id"
-        root_response = self.req(url)
-        return root_response['urls']['apis']['rest']['bulk'].replace('{version}','2.0')
+        try:
+            root_response = self.req(url)
+            
+            try:
+                return root_response['urls']['apis']['rest']['bulk'].replace('{version}','2.0')
+            except:
+                    print("Erro ao ler a resposta:"+root_response)
+        except:
+            print("Erro na requisição")
    
     def get_standard_url(self):
         """Método para adquirir o url para a api padrão 2.0
@@ -89,8 +96,14 @@ class EloquaInterface:
         """
         
         url = "https://login.eloqua.com/id"
-        root_response = self.req(url)
-        return root_response['urls']['apis']['rest']['standard'].replace('{version}','2.0')
+        try:
+            root_response = self.req(url)
+            try:
+                return root_response['urls']['apis']['rest']['standard'].replace('{version}','2.0')
+            except:
+                print("Erro na resposta: {}".format(root_response))
+        except:
+            print("Erro na requisição")
     
     def get_campaigns(self):
         """Método para adquirir todas as campanhas do eloqua. Usamos a versão 2.0 da api
@@ -315,6 +328,9 @@ class EloquaInterface:
                       "ActivityId": "{{Activity.Id}}",
                       "ActivityType": "{{Activity.Type}}",
                       "ActivityDate": "{{Activity.CreatedAt}}",
+                      "AssetType": "{{Activity.Asset.Type}}",
+                      "AssetName": "{{Activity.Asset.Name}}",
+                      "AssetId": "{{Activity.Asset.Id}}",
                       "EmailAddress": "{{Activity.Field(EmailAddress)}}",
                       "CampaignId": "{{Activity.Campaign.Id}}",
                       "EmailSendType": "{{Activity.Field(EmailSendType)}}"
