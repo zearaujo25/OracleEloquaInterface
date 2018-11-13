@@ -74,8 +74,15 @@ class EloquaInterface:
         """
         
         url = "https://login.eloqua.com/id"
-        root_response = self.req(url)
-        return root_response['urls']['apis']['rest']['bulk'].replace('{version}','2.0')
+        try:
+            root_response = self.req(url)
+            
+            try:
+                return root_response['urls']['apis']['rest']['bulk'].replace('{version}','2.0')
+            except:
+                    print("Erro ao ler a resposta:"+root_response)
+        except:
+            print("Erro na requisição")
    
     def get_standard_url(self):
         """Método para adquirir o url para a api padrão 2.0
@@ -89,8 +96,14 @@ class EloquaInterface:
         """
         
         url = "https://login.eloqua.com/id"
-        root_response = self.req(url)
-        return root_response['urls']['apis']['rest']['standard'].replace('{version}','2.0')
+        try:
+            root_response = self.req(url)
+            try:
+                return root_response['urls']['apis']['rest']['standard'].replace('{version}','2.0')
+            except:
+                print("Erro na resposta: {}".format(root_response))
+        except:
+            print("Erro na requisição")
     
     def get_campaigns(self):
         """Método para adquirir todas as campanhas do eloqua. Usamos a versão 2.0 da api
@@ -159,15 +172,18 @@ class EloquaInterface:
         # assumimos que o a api de exportação de dados não está pronta 
         status = "pending"
         count =0
+        sleep_time = 10
+        check_response = self.check_data(url,data_uri)
+        status = check_response["status"]
+        
         # Enquanto o status da api estiver pending, estaremos em loop. Há um contador limite que não deixa esperarmos para sempre.  
-        while status == "pending":
+        while status != "success":
+            time.sleep(sleep_time)
+            sleep_time = sleep_time*2
             check_response = self.check_data(url,data_uri)
             status = check_response["status"]
             count+=1
-            time.sleep(10)
-            #verifica se o timer estorou
-            if(count == 60):
-                status = "success"
+            
         get_data_response = self.req(get_data_url,method='get')
         print("Resposta: count: {}, hasMore: {}".format(get_data_response["count"],get_data_response["hasMore"]))
             
@@ -315,6 +331,9 @@ class EloquaInterface:
                       "ActivityId": "{{Activity.Id}}",
                       "ActivityType": "{{Activity.Type}}",
                       "ActivityDate": "{{Activity.CreatedAt}}",
+                      "AssetType": "{{Activity.Asset.Type}}",
+                      "AssetName": "{{Activity.Asset.Name}}",
+                      "AssetId": "{{Activity.Asset.Id}}",
                       "EmailAddress": "{{Activity.Field(EmailAddress)}}",
                       "CampaignId": "{{Activity.Campaign.Id}}",
                       "EmailSendType": "{{Activity.Field(EmailSendType)}}"
@@ -334,7 +353,7 @@ class EloquaInterface:
                 lista contendo todos os daos de clique
         """
         bulk_api_url = self.get_bulk_url()
-        bulk_response = self.build_bounce(bulk_api_url)
+        bulk_response = self.build_click(bulk_api_url)
         click_uri = str(bulk_response["uri"])
         syc_response = self.syc_data(bulk_api_url,click_uri)
         data_uri = syc_response["uri"]
@@ -391,8 +410,17 @@ class EloquaInterface:
         """
         data = []
         count = 1
+        failed_cmp = []
         for campaign in campaign_ids:
             print("Retirando campanha de numero {} - ID: {}".format(count,campaign))
             count +=1
-            data.extend(self.get_sent_data(campaign))
+            try:
+                data.extend(self.get_sent_data(campaign))
+            except:
+                print("Erro na campanha: {}\n Adiocionadno na lsita de errados".format(campaign))
+                failed_cmp.extend(campaign)
+        for id in failed_cmp:
+            print("Retirando as camanhas que deram errado:")
+            data.extend(self.get_campaigns_sent(id))
+                
         return data
