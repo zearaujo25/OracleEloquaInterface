@@ -272,6 +272,7 @@ class EloquaInterface:
             "EmailWebLink": "{{Activity.Field(EmailWebLink)}}",
             "EmailClickedThruLink": "{{Activity.Field(EmailClickedThruLink)}}",
             "CampaignId": "{{Activity.Campaign.Id}}",
+            "CampaignName": "{{Activity.Campaign.Field(CampaignName)}}",
             "ExternalId": "{{Activity.ExternalId}}",
             "EmailSendType": "{{Activity.Field(EmailSendType)}}"
             },
@@ -313,7 +314,7 @@ class EloquaInterface:
         }
         return self.build_export(bulk_api_url,data)
 
-    def build_sent(self,bulk_api_url,campaign_id):
+    def build_open(self,bulk_api_url):
         """Método para construir a api de dados de email enviados 
 
             Parameters
@@ -326,20 +327,61 @@ class EloquaInterface:
                 dicionário contento a resposta da requisição 
         """
         data = {
-        "name": "Bulk Activity Export - Email Open",
+                "filter": "'{{Activity.Type}}'='EmailOpen' AND '{{Activity.Campaign.Field(CampaignName)}}' ~ 'sef_%'",
+                "name": "Bulk Activity Export - Email Open",
+                "fields": {
+                    "ActivityId": "{{Activity.Id}}",
+                    "ActivityType": "{{Activity.Type}}",
+                    "ActivityDate": "{{Activity.CreatedAt}}",
+                    "ContactId": "{{Activity.Contact.Id}}",
+                    "IpAddress": "{{Activity.Field(IpAddress)}}",
+                    "VisitorId": "{{Activity.Visitor.Id}}",
+                    "VisitorExternalId": "{{Activity.Visitor.ExternalId}}",
+                    "EmailRecipientId": "{{Activity.Field(EmailRecipientId)}}",
+                    "AssetType": "{{Activity.Asset.Type}}",
+                    "AssetName": "{{Activity.Asset.Name}}",
+                    "AssetId": "{{Activity.Asset.Id}}",
+                    "SubjectLine": "{{Activity.Field(SubjectLine)}}",
+                    "EmailWebLink": "{{Activity.Field(EmailWebLink)}}",
+                    "CampaignId": "{{Activity.Campaign.Id}}",
+                    "CRMCampaignId": "{{Activity.Campaign.Field(CRMCampaignId)}}",
+                    "CampaignName": "{{Activity.Campaign.Field(CampaignName)}}",
+                    "ExternalId": "{{Activity.ExternalId}}",
+                    "DeploymentId": "{{Activity.Field(EmailDeploymentId)}}",
+                    "EmailSendType": "{{Activity.Field(EmailSendType)}}",
+                    "EmailAddress": "{{Activity.Field(EmailAddress)}}",
+                    "ContactIdExt": "{{Activity.Contact.Field(ContactIDExt)}}"
+                }
+                }
+        return self.build_export(bulk_api_url,data)
+    def build_sent(self,bulk_api_url,campaign_id):
+        """Método para construir a api de dados de email enviados 
+
+                Parameters
+                ----------
+                bulk_api_url : str
+                    url da bulk api para este usuário           
+                Returns
+                -------
+                dict
+                    dicionário contento a resposta da requisição 
+        """
+        data = {
+             "name": "Bulk Activity Export - Email Open",
                 "fields": {
                       "ActivityId": "{{Activity.Id}}",
                       "ActivityType": "{{Activity.Type}}",
                       "ActivityDate": "{{Activity.CreatedAt}}",
                       "AssetType": "{{Activity.Asset.Type}}",
                       "AssetName": "{{Activity.Asset.Name}}",
-                      "AssetId": "{{Activity.Asset.Id}}",
+                      "AssetId": "{{Activity.Asset.Id}}",             
                       "EmailAddress": "{{Activity.Field(EmailAddress)}}",
                       "CampaignId": "{{Activity.Campaign.Id}}",
+                      "CampaignName": "{{Activity.Campaign.Field(CampaignName)}}",
                       "EmailSendType": "{{Activity.Field(EmailSendType)}}"
                           },
-        "filter": "'{{Activity.Type}}' = 'EmailSend' AND '{{Activity.Campaign.Id}}' = '"+str(campaign_id)+"'",
-        }
+             "filter": "'{{Activity.Type}}' = 'EmailSend' AND '{{Activity.Campaign.Id}}' = '"+str(campaign_id)+"'",
+            }
         return self.build_export(bulk_api_url,data)
 
     def get_click_data(self):
@@ -350,7 +392,7 @@ class EloquaInterface:
             Returns
             -------
             list
-                lista contendo todos os daos de clique
+                lista contendo todos os dados de clique
         """
         bulk_api_url = self.get_bulk_url()
         bulk_response = self.build_click(bulk_api_url)
@@ -359,6 +401,23 @@ class EloquaInterface:
         data_uri = syc_response["uri"]
         return self.get_data(bulk_api_url,data_uri)
 
+    def get_open_data(self):
+        """Método para buscar todos os dados de emails abertos  
+
+            Parameters
+            ----------       
+            Returns
+            -------
+            list
+                lista contendo todos os dados de emails abertos
+        """
+        bulk_api_url = self.get_bulk_url()
+        bulk_response = self.build_open(bulk_api_url)
+        print("Bulk response open : {}".format(bulk_response))
+        click_uri = str(bulk_response["uri"])
+        syc_response = self.syc_data(bulk_api_url,click_uri)
+        data_uri = syc_response["uri"]
+        return self.get_data(bulk_api_url,data_uri)
 
     def get_bounce_data(self):
         """Método para buscar todos os dados de bounce  
