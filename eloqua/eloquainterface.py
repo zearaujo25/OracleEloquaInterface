@@ -315,6 +315,7 @@ class EloquaInterface:
               "AssetName": "{{Activity.Asset.Name}}",
               "AssetId": "{{Activity.Asset.Id}}",
               "CampaignId": "{{Activity.Campaign.Id}}",
+              "CampaignName": "{{Activity.Campaign.Field(CampaignName)}}",
               "ExternalId": "{{Activity.ExternalId}}",
               "EmailRecipientId": "{{Activity.Field(EmailRecipientId)}}",
               "DeploymentId": "{{Activity.Field(EmailDeploymentId)}}",
