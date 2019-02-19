@@ -9,7 +9,10 @@ import requests
 import base64 
 import json
 import time
+import logging
 from math import ceil 
+
+
 class UserPasswordException(Exception):
     pass
 
@@ -150,7 +153,24 @@ class EloquaInterface:
         """
         get_data_url = url+data_uri
         return self.req(get_data_url,method='get')   
-    
+    def get_sync_log(self,url):
+        """Método para adquirir os dados necessários
+
+            Parameters
+            ----------
+            url : str
+                url da bulk api para este usuário
+            data_uri : str
+                uri do dado a ser exportado
+                
+            Returns
+            -------
+            list
+                lista com todos os dados adquiridos 
+        """
+        print(self.req(url+'/logs',method='get'))
+        return 'Teste' 
+
     def get_data(self,url,data_uri):
         """Método para adquirir os dados necessários
 
@@ -182,6 +202,11 @@ class EloquaInterface:
             sleep_time = sleep_time*2
             check_response = self.check_data(url,data_uri)
             status = check_response["status"]
+            logging.debug("Status da syncronizacao: %s",status)
+            if status == 'error':
+                logging.error("Erro no sync: {}".format(check_response))
+                self.get_sync_log(url+data_uri)
+                raise Exception("Erro na sicronização")
             count+=1
             
         get_data_response = self.req(get_data_url,method='get')
@@ -283,9 +308,7 @@ class EloquaInterface:
         "filter": "'{{Activity.Type}}' = 'EmailClickthrough'",
         }
         if extra_filter is not None:
-            filter_keys = extra_filter.keys()
-            for key in filter_keys:
-                data["filter"] = data["filter"] + " AND '{}' {} '{}'".format(key,extra_filter[key]["op"],extra_filter[key]['value'])        
+            data['filter'] = self._add_filters(data['filter'],extra_filter)    
         return self.build_export(bulk_api_url,data)  
 
     def build_bounce(self,bulk_api_url):
@@ -371,16 +394,14 @@ class EloquaInterface:
                 }
                 }
         if extra_filter is not None:
-            filter_keys = extra_filter.keys()
-            for key in filter_keys:
-                data["filter"] = data["filter"] + " AND '{}' {} '{}'".format(key,extra_filter[key]["op"],extra_filter[key]['value'])        
+            data['filter'] = self._add_filters(data['filter'],extra_filter)    
         return self.build_export(bulk_api_url,data)
     def build_sent(self,bulk_api_url,extra_filter = None):
         """Método para construir a api de dados de email enviados 
 
                 Parameters
                 ----------
-                extra_filter
+                extra_filter : dict
                     dicionario contendo os camps para serem filtrados como chave, 
                     e como valor possuem outro dicionario, contendo o operador e o valor em si a ser filtrado 
                     referencia:https://docs.oracle.com/cloud/latest/marketingcs_gs/OMCAB/Developers/BulkAPI/Tutorials/Filtering.htm  
@@ -409,10 +430,29 @@ class EloquaInterface:
              ,
             }
         if extra_filter is not None:
-            filter_keys = extra_filter.keys()
-            for key in filter_keys:
-                data["filter"] = data["filter"] + " AND '{}' {} '{}'".format(key,extra_filter[key]["op"],extra_filter[key]['value'])
+            data['filter'] = self._add_filters(data['filter'],extra_filter)
         return self.build_export(bulk_api_url,data)
+
+    def _add_filters(self,old_filter,extra_filter):
+        """Método interno para formatar o filtro 
+
+                Parameters
+                ----------
+                old_filter : str
+                    string contendo o filtro anteriormente ultilizado 
+                extra_filter : dict
+                    Dicionario de array de dicioanrios, contendo a variavel a ser filtrada. O arrya sao os conjuntos de condiçoes aplicados aquela variavel         
+                Returns
+                -------
+                dict
+                    dicionário contento a resposta da requisição 
+        """
+        filter_keys = extra_filter.keys()
+        new_filter = old_filter
+        for key in filter_keys:
+            for condition in extra_filter[key]:
+                new_filter = new_filter + " AND '{}' {} '{}'".format(key,condition["op"],condition['value'])
+        return new_filter
 
     def get_click_data(self,extra_filter = None):
         """Método para buscar todos os dados de clique  
@@ -449,11 +489,18 @@ class EloquaInterface:
             list
                 lista contendo todos os dados de emails abertos
         """
+        logging.info('Inicio da busca dos dados')
+        logging.info("Buscando a url da  bulk API")
         bulk_api_url = self.get_bulk_url()
+        logging.debug("Endereco da bulk: %s",bulk_api_url)
+        logging.info("Construindo a url de exportacao da bulk API")
         bulk_response = self.build_open(bulk_api_url,extra_filter)
-        click_uri = str(bulk_response["uri"])
-        syc_response = self.syc_data(bulk_api_url,click_uri)
+        build_uri = str(bulk_response["uri"])
+        logging.debug("Endereço de exportacao: %s",build_uri)
+        logging.info("Iniciando a sincronizacao da API")
+        syc_response = self.syc_data(bulk_api_url,build_uri)
         data_uri = syc_response["uri"]
+        
         return self.get_data(bulk_api_url,data_uri)
 
     def get_bounce_data(self):
@@ -466,9 +513,15 @@ class EloquaInterface:
             list
                 lista contendo todos os dados de bounce
         """
+        logging.info('Inicio da busca dos dados')
+        logging.info("Buscando a url da  bulk API")
         bulk_api_url = self.get_bulk_url()
         bulk_response = self.build_bounce(bulk_api_url)
+        logging.debug("Endereco da bulk: %s",bulk_api_url)
+        logging.info("Construindo a url de exportacao da bulk API")
         build_uri = str(bulk_response["uri"])
+        logging.debug("Endereço de exportacao: %s",build_uri)
+        logging.info("Iniciando a sincronizacao da API")
         syc_response = self.syc_data(bulk_api_url,build_uri)
         data_uri = syc_response["uri"]
         return self.get_data(bulk_api_url,data_uri)
@@ -487,9 +540,15 @@ class EloquaInterface:
             list
                 lista contendo todos os dados de email enviado daquela campanha
         """
+        logging.info('Inicio da busca dos dados')
+        logging.info("Buscando a url da  bulk API")
         bulk_api_url = self.get_bulk_url()
+        logging.debug("Endereco da bulk: %s",bulk_api_url)
+        logging.info("Construindo a url de exportacao da bulk API")
         bulk_response = self.build_sent(bulk_api_url,extra_filter = extra_filter)
         build_uri = str(bulk_response["uri"])
+        logging.debug("Endereço de exportacao: %s",build_uri)
+        logging.info("Iniciando a sincronizacao da API")
         syc_response = self.syc_data(bulk_api_url,build_uri)
         data_uri = syc_response["uri"]
         return self.get_data(bulk_api_url,data_uri)
