@@ -9,7 +9,10 @@ import requests
 import base64 
 import json
 import time
+import logging
 from math import ceil 
+
+
 class UserPasswordException(Exception):
     pass
 
@@ -150,7 +153,24 @@ class EloquaInterface:
         """
         get_data_url = url+data_uri
         return self.req(get_data_url,method='get')   
-    
+    def get_sync_log(self,url):
+        """Método para adquirir os dados necessários
+
+            Parameters
+            ----------
+            url : str
+                url da bulk api para este usuário
+            data_uri : str
+                uri do dado a ser exportado
+                
+            Returns
+            -------
+            list
+                lista com todos os dados adquiridos 
+        """
+        print(self.req(url+'/logs',method='get'))
+        return 'Teste' 
+
     def get_data(self,url,data_uri):
         """Método para adquirir os dados necessários
 
@@ -182,6 +202,11 @@ class EloquaInterface:
             sleep_time = sleep_time*2
             check_response = self.check_data(url,data_uri)
             status = check_response["status"]
+            logging.debug("Status da syncronizacao: %s",status)
+            if status == 'error':
+                logging.error("Erro no sync: {}".format(check_response))
+                self.get_sync_log(url+data_uri)
+                raise Exception("Erro na sicronização")
             count+=1
             
         get_data_response = self.req(get_data_url,method='get')
@@ -241,13 +266,17 @@ class EloquaInterface:
         bulk_end_point = "activities/exports"
         return self.req(bulk_api_url+bulk_end_point,method = 'post',data = data)
 
-    def build_click(self,bulk_api_url) :
+    def build_click(self,bulk_api_url,extra_filter = None) :
         """Método para construir a api de dados de clique 
 
             Parameters
             ----------
             bulk_api_url : str
-                url da bulk api para este usuário           
+                url da bulk api para este usuário
+            extra_filter
+                dicionario contendo os camps para serem filtrados como chave, 
+                e como valor possuem outro dicionario, contendo o operador e o valor em si a ser filtrado 
+                referencia:https://docs.oracle.com/cloud/latest/marketingcs_gs/OMCAB/Developers/BulkAPI/Tutorials/Filtering.htm             
             Returns
             -------
             dict
@@ -272,11 +301,14 @@ class EloquaInterface:
             "EmailWebLink": "{{Activity.Field(EmailWebLink)}}",
             "EmailClickedThruLink": "{{Activity.Field(EmailClickedThruLink)}}",
             "CampaignId": "{{Activity.Campaign.Id}}",
+            "CampaignName": "{{Activity.Campaign.Field(CampaignName)}}",
             "ExternalId": "{{Activity.ExternalId}}",
             "EmailSendType": "{{Activity.Field(EmailSendType)}}"
             },
         "filter": "'{{Activity.Type}}' = 'EmailClickthrough'",
         }
+        if extra_filter is not None:
+            data['filter'] = self._add_filters(data['filter'],extra_filter)    
         return self.build_export(bulk_api_url,data)  
 
     def build_bounce(self,bulk_api_url):
@@ -285,7 +317,11 @@ class EloquaInterface:
             Parameters
             ----------
             bulk_api_url : str
-                url da bulk api para este usuário           
+                url da bulk api para este usuário 
+            extra_filter
+                dicionario contendo os camps para serem filtrados como chave, 
+                e como valor possuem outro dicionario, contendo o operador e o valor em si a ser filtrado 
+                referencia:https://docs.oracle.com/cloud/latest/marketingcs_gs/OMCAB/Developers/BulkAPI/Tutorials/Filtering.htm            
             Returns
             -------
             dict
@@ -302,6 +338,7 @@ class EloquaInterface:
               "AssetName": "{{Activity.Asset.Name}}",
               "AssetId": "{{Activity.Asset.Id}}",
               "CampaignId": "{{Activity.Campaign.Id}}",
+              "CampaignName": "{{Activity.Campaign.Field(CampaignName)}}",
               "ExternalId": "{{Activity.ExternalId}}",
               "EmailRecipientId": "{{Activity.Field(EmailRecipientId)}}",
               "DeploymentId": "{{Activity.Field(EmailDeploymentId)}}",
@@ -313,52 +350,158 @@ class EloquaInterface:
         }
         return self.build_export(bulk_api_url,data)
 
-    def build_sent(self,bulk_api_url,campaign_id):
+    def build_open(self,bulk_api_url,extra_filter = None):
         """Método para construir a api de dados de email enviados 
 
             Parameters
             ----------
             bulk_api_url : str
-                url da bulk api para este usuário           
+                url da bulk api para este usuário 
+            extra_filter
+                dicionario contendo os camps para serem filtrados como chave, 
+                e como valor possuem outro dicionario, contendo o operador e o valor em si a ser filtrado 
+                referencia:https://docs.oracle.com/cloud/latest/marketingcs_gs/OMCAB/Developers/BulkAPI/Tutorials/Filtering.htm           
             Returns
             -------
             dict
                 dicionário contento a resposta da requisição 
         """
         data = {
-        "name": "Bulk Activity Export - Email Open",
+                "filter": "'{{Activity.Type}}'='EmailOpen'",
+                "name": "Bulk Activity Export - Email Open",
+                "fields": {
+                    "ActivityId": "{{Activity.Id}}",
+                    "ActivityType": "{{Activity.Type}}",
+                    "ActivityDate": "{{Activity.CreatedAt}}",
+                    "ContactId": "{{Activity.Contact.Id}}",
+                    "IpAddress": "{{Activity.Field(IpAddress)}}",
+                    "VisitorId": "{{Activity.Visitor.Id}}",
+                    "VisitorExternalId": "{{Activity.Visitor.ExternalId}}",
+                    "EmailRecipientId": "{{Activity.Field(EmailRecipientId)}}",
+                    "AssetType": "{{Activity.Asset.Type}}",
+                    "AssetName": "{{Activity.Asset.Name}}",
+                    "AssetId": "{{Activity.Asset.Id}}",
+                    "SubjectLine": "{{Activity.Field(SubjectLine)}}",
+                    "EmailWebLink": "{{Activity.Field(EmailWebLink)}}",
+                    "CampaignId": "{{Activity.Campaign.Id}}",
+                    "CRMCampaignId": "{{Activity.Campaign.Field(CRMCampaignId)}}",
+                    "CampaignName": "{{Activity.Campaign.Field(CampaignName)}}",
+                    "ExternalId": "{{Activity.ExternalId}}",
+                    "DeploymentId": "{{Activity.Field(EmailDeploymentId)}}",
+                    "EmailSendType": "{{Activity.Field(EmailSendType)}}",
+                    "EmailAddress": "{{Activity.Field(EmailAddress)}}",
+                    "ContactIdExt": "{{Activity.Contact.Field(ContactIDExt)}}"
+                }
+                }
+        if extra_filter is not None:
+            data['filter'] = self._add_filters(data['filter'],extra_filter)    
+        return self.build_export(bulk_api_url,data)
+    def build_sent(self,bulk_api_url,extra_filter = None):
+        """Método para construir a api de dados de email enviados 
+
+                Parameters
+                ----------
+                extra_filter : dict
+                    dicionario contendo os camps para serem filtrados como chave, 
+                    e como valor possuem outro dicionario, contendo o operador e o valor em si a ser filtrado 
+                    referencia:https://docs.oracle.com/cloud/latest/marketingcs_gs/OMCAB/Developers/BulkAPI/Tutorials/Filtering.htm  
+                bulk_api_url : str
+                    url da bulk api para este usuário           
+                Returns
+                -------
+                dict
+                    dicionário contento a resposta da requisição 
+        """
+        data = {
+             "name": "Bulk Activity Export - Email Open",
                 "fields": {
                       "ActivityId": "{{Activity.Id}}",
                       "ActivityType": "{{Activity.Type}}",
                       "ActivityDate": "{{Activity.CreatedAt}}",
                       "AssetType": "{{Activity.Asset.Type}}",
                       "AssetName": "{{Activity.Asset.Name}}",
-                      "AssetId": "{{Activity.Asset.Id}}",
+                      "AssetId": "{{Activity.Asset.Id}}",             
                       "EmailAddress": "{{Activity.Field(EmailAddress)}}",
                       "CampaignId": "{{Activity.Campaign.Id}}",
+                      "CampaignName": "{{Activity.Campaign.Field(CampaignName)}}",
                       "EmailSendType": "{{Activity.Field(EmailSendType)}}"
                           },
-        "filter": "'{{Activity.Type}}' = 'EmailSend' AND '{{Activity.Campaign.Id}}' = '"+str(campaign_id)+"'",
-        }
+             "filter": "'{{Activity.Type}}' = 'EmailSend'"
+             ,
+            }
+        if extra_filter is not None:
+            data['filter'] = self._add_filters(data['filter'],extra_filter)
         return self.build_export(bulk_api_url,data)
 
-    def get_click_data(self):
+    def _add_filters(self,old_filter,extra_filter):
+        """Método interno para formatar o filtro 
+
+                Parameters
+                ----------
+                old_filter : str
+                    string contendo o filtro anteriormente ultilizado 
+                extra_filter : dict
+                    Dicionario de array de dicioanrios, contendo a variavel a ser filtrada. O arrya sao os conjuntos de condiçoes aplicados aquela variavel         
+                Returns
+                -------
+                dict
+                    dicionário contento a resposta da requisição 
+        """
+        filter_keys = extra_filter.keys()
+        new_filter = old_filter
+        for key in filter_keys:
+            for condition in extra_filter[key]:
+                new_filter = new_filter + " AND '{}' {} '{}'".format(key,condition["op"],condition['value'])
+        return new_filter
+
+    def get_click_data(self,extra_filter = None):
         """Método para buscar todos os dados de clique  
 
             Parameters
-            ----------       
+            ----------  
+            extra_filter
+                dicionario contendo os camps para serem filtrados como chave, 
+                e como valor possuem outro dicionario, contendo o operador e o valor em si a ser filtrado 
+                referencia:https://docs.oracle.com/cloud/latest/marketingcs_gs/OMCAB/Developers/BulkAPI/Tutorials/Filtering.htm       
             Returns
             -------
             list
-                lista contendo todos os daos de clique
+                lista contendo todos os dados de clique
         """
         bulk_api_url = self.get_bulk_url()
-        bulk_response = self.build_click(bulk_api_url)
+        bulk_response = self.build_click(bulk_api_url,extra_filter)
         click_uri = str(bulk_response["uri"])
         syc_response = self.syc_data(bulk_api_url,click_uri)
         data_uri = syc_response["uri"]
         return self.get_data(bulk_api_url,data_uri)
 
+    def get_open_data(self,extra_filter = None):
+        """Método para buscar todos os dados de emails abertos  
+
+            Parameters
+            ----------  
+            extra_filter
+                dicionario contendo os camps para serem filtrados como chave, 
+                e como valor possuem outro dicionario, contendo o operador e o valor em si a ser filtrado 
+                referencia:https://docs.oracle.com/cloud/latest/marketingcs_gs/OMCAB/Developers/BulkAPI/Tutorials/Filtering.htm    
+            Returns
+            -------
+            list
+                lista contendo todos os dados de emails abertos
+        """
+        logging.info('Inicio da busca dos dados')
+        logging.info("Buscando a url da  bulk API")
+        bulk_api_url = self.get_bulk_url()
+        logging.debug("Endereco da bulk: %s",bulk_api_url)
+        logging.info("Construindo a url de exportacao da bulk API")
+        bulk_response = self.build_open(bulk_api_url,extra_filter)
+        build_uri = str(bulk_response["uri"])
+        logging.debug("Endereço de exportacao: %s",build_uri)
+        logging.info("Iniciando a sincronizacao da API")
+        syc_response = self.syc_data(bulk_api_url,build_uri)
+        data_uri = syc_response["uri"]
+        
+        return self.get_data(bulk_api_url,data_uri)
 
     def get_bounce_data(self):
         """Método para buscar todos os dados de bounce  
@@ -370,57 +513,42 @@ class EloquaInterface:
             list
                 lista contendo todos os dados de bounce
         """
+        logging.info('Inicio da busca dos dados')
+        logging.info("Buscando a url da  bulk API")
         bulk_api_url = self.get_bulk_url()
         bulk_response = self.build_bounce(bulk_api_url)
+        logging.debug("Endereco da bulk: %s",bulk_api_url)
+        logging.info("Construindo a url de exportacao da bulk API")
         build_uri = str(bulk_response["uri"])
+        logging.debug("Endereço de exportacao: %s",build_uri)
+        logging.info("Iniciando a sincronizacao da API")
         syc_response = self.syc_data(bulk_api_url,build_uri)
         data_uri = syc_response["uri"]
         return self.get_data(bulk_api_url,data_uri)
 
-    def get_sent_data(self,campaign_id):
+    def get_sent_data(self,extra_filter = None):
         """Método para buscar todos os dados de emials enviados de uma dada campanha  
 
             Parameters
             ----------  
-            campaign_id : str
-                string contendo o código de campnha 
+            extra_filter
+                dicionario contendo os camps para serem filtrados como chave, 
+                e como valor possuem outro dicionario, contendo o operador e o valor em si a ser filtrado 
+                referencia:https://docs.oracle.com/cloud/latest/marketingcs_gs/OMCAB/Developers/BulkAPI/Tutorials/Filtering.htm  
             Returns
             -------
             list
                 lista contendo todos os dados de email enviado daquela campanha
         """
+        logging.info('Inicio da busca dos dados')
+        logging.info("Buscando a url da  bulk API")
         bulk_api_url = self.get_bulk_url()
-        bulk_response = self.build_sent(bulk_api_url,campaign_id)
+        logging.debug("Endereco da bulk: %s",bulk_api_url)
+        logging.info("Construindo a url de exportacao da bulk API")
+        bulk_response = self.build_sent(bulk_api_url,extra_filter = extra_filter)
         build_uri = str(bulk_response["uri"])
+        logging.debug("Endereço de exportacao: %s",build_uri)
+        logging.info("Iniciando a sincronizacao da API")
         syc_response = self.syc_data(bulk_api_url,build_uri)
         data_uri = syc_response["uri"]
         return self.get_data(bulk_api_url,data_uri)
-
-    def get_campaigns_sent(self,campaign_ids):
-        """Método para buscar todos os dados de emials enviados de uma dada campanha  
-
-            Parameters
-            ----------  
-            campaign_ids : list
-                lista de todos os ids de campanha 
-            Returns
-            -------
-            list
-                lista contendo todos os dados de email enviado de todas as campanhas
-        """
-        data = []
-        count = 1
-        failed_cmp = []
-        for campaign in campaign_ids:
-            print("Retirando campanha de numero {} - ID: {}".format(count,campaign))
-            count +=1
-            try:
-                data.extend(self.get_sent_data(campaign))
-            except:
-                print("Erro na campanha: {}\n Adiocionadno na lsita de errados".format(campaign))
-                failed_cmp.extend(campaign)
-        for id in failed_cmp:
-            print("Retirando as camanhas que deram errado:")
-            data.extend(self.get_campaigns_sent(id))
-                
-        return data
